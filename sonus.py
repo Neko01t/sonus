@@ -3,7 +3,6 @@ import pyaudio
 import numpy as np
 import threading
 import sys
-import math
 
 # =======================
 # Audio Configuration
@@ -20,8 +19,10 @@ stream = p.open(format=FORMAT,
                 rate=RATE,
                 input=True,
                 frames_per_buffer=CHUNK)
+
 audio_data_buffer = {"data": np.zeros(CHUNK, dtype=np.int16)}
 
+# Thread-safe listener
 def listen():
     while True:
         try:
@@ -46,10 +47,9 @@ pygame.display.set_caption("2D Sound Shape Visualizer")
 clock = pygame.time.Clock()
 
 BG_COLOR = (0, 0, 0)
-SHAPE_COLOR = (0, 255, 255)
 
 # =======================
-#  Functions
+# Audio Processing
 # =======================
 def get_audio_features(samples):
     # Volume
@@ -64,6 +64,9 @@ def get_audio_features(samples):
     dominant_freq = freqs[np.argmax(mag)]
     return volume, dominant_freq
 
+# For smoothing
+smoothed_volume = 0
+smoothed_freq = 0
 
 # =======================
 # Main Loop
@@ -78,11 +81,32 @@ while running:
             running = False
 
     pygame.draw.line(screen, (75, 0, 130), (0, HEIGHT // 2), (WIDTH, HEIGHT // 2), 5)
-
     pygame.draw.line(screen, (75, 0, 130), (WIDTH // 2, 0), (WIDTH // 2, HEIGHT), 5)
 
     samples = audio_data_buffer["data"]
     volume, freq = get_audio_features(samples)
+
+    if np.isnan(volume):
+        volume = 0
+    if np.isnan(freq):
+        freq = 0
+    smoothed_volume = 0.9 * smoothed_volume + 0.1 * volume
+    smoothed_freq = 0.9 * smoothed_freq + 0.1 * freq
+
+    radius = int(50 + smoothed_volume * 400)
+
+    # Map frequency to color
+    freq_normalized = min(smoothed_freq / 1000, 1.0)
+    color = (
+        int(255 * freq_normalized),
+        102,
+        int(255 * (1 - freq_normalized))
+    )
+
+    # Draw reactive circle
+    pygame.draw.circle(screen, color, (WIDTH // 2, HEIGHT // 2), radius)
+
+    # Update display
     pygame.display.flip()
 
 # =======================
